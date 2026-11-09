@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/models/product.dart';
 import '../../providers/product_provider.dart';
+import '../details/product_details_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -170,7 +171,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           }
                           return const SizedBox.shrink();
                         }
-                        return _ProductCard(product: provider.products[index]);
+                        final product = provider.products[index];
+                        return _ProductCard(
+                          product: product,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    ProductDetailsScreen(product: product),
+                              ),
+                            );
+                          },
+                        );
                       },
                     );
                   },
@@ -206,9 +218,10 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _ProductCard extends StatelessWidget {
-  const _ProductCard({required this.product});
+  const _ProductCard({required this.product, required this.onTap});
 
   final Product product;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -220,69 +233,76 @@ class _ProductCard extends StatelessWidget {
       elevation: 1.5,
       shadowColor: Colors.black.withValues(alpha: 0.08),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Container(
-              width: double.infinity,
-              color: const Color(0xFFF1F3F5),
-              padding: const EdgeInsets.all(8),
-              child: Image.network(
-                product.thumbnail,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) => const Center(
-                  child: Icon(
-                    Icons.image_not_supported_outlined,
-                    color: Colors.black38,
-                    size: 36,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                color: const Color(0xFFF1F3F5),
+                padding: const EdgeInsets.all(8),
+                child: Image.network(
+                  product.thumbnail,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Center(
+                    child: Icon(
+                      Icons.image_not_supported_outlined,
+                      color: Colors.black38,
+                      size: 36,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    height: 1.25,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.star_rounded, color: colors.tertiary, size: 18),
-                    const SizedBox(width: 3),
-                    Text(
-                      product.rating.toStringAsFixed(1),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      height: 1.25,
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '\$${product.price.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    color: colors.primary,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.star_rounded,
+                        color: colors.tertiary,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 3),
+                      Text(
+                        product.rating.toStringAsFixed(1),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '\$${product.price.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      color: colors.primary,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
