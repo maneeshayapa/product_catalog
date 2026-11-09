@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../data/models/product.dart';
+import '../../providers/cart_provider.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   const ProductDetailsScreen({super.key, required this.product});
@@ -177,6 +179,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
           height: 54,
           child: FilledButton.icon(
             onPressed: () {
+              context.read<CartProvider>().addToCart(product);
               ScaffoldMessenger.of(context)
                 ..hideCurrentSnackBar()
                 ..showSnackBar(
