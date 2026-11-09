@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/product.dart';
+import '../../providers/cart_provider.dart';
 import '../../providers/product_provider.dart';
+import '../cart/cart_screen.dart';
 import '../details/product_details_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -81,6 +83,24 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         elevation: 0,
+        actions: [
+          Consumer<CartProvider>(
+            builder: (context, cart, _) => IconButton(
+              tooltip: 'Shopping cart',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const CartScreen()),
+                );
+              },
+              icon: Badge.count(
+                count: cart.itemCount,
+                isLabelVisible: cart.itemCount > 0,
+                child: const Icon(Icons.shopping_cart_outlined),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Column(
         children: [

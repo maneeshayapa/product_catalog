@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:product_catalog/data/models/product.dart';
 import 'package:product_catalog/data/repositories/product_repository.dart';
 import 'package:product_catalog/data/services/product_service.dart';
+import 'package:product_catalog/providers/cart_provider.dart';
 import 'package:product_catalog/providers/product_provider.dart';
 import 'package:product_catalog/screens/home/home_screen.dart';
 import 'package:provider/provider.dart';
@@ -21,11 +22,17 @@ void main() {
       thumbnail: '',
       images: const [],
     );
+    final cartProvider = CartProvider();
 
     await tester.pumpWidget(
-      ChangeNotifierProvider(
-        create: (_) =>
-            ProductProvider(repository: _FakeProductRepository(product)),
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(
+            create: (_) =>
+                ProductProvider(repository: _FakeProductRepository(product)),
+          ),
+          ChangeNotifierProvider.value(value: cartProvider),
+        ],
         child: const MaterialApp(home: HomeScreen()),
       ),
     );
@@ -46,6 +53,7 @@ void main() {
       find.text('Product added to cart successfully! A useful product'),
       findsOneWidget,
     );
+    expect(cartProvider.itemCount, 1);
   });
 }
 
