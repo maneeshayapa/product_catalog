@@ -1,13 +1,21 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:product_catalog/data/models/product.dart';
 import 'package:product_catalog/providers/cart_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late SharedPreferences preferences;
   late CartProvider cart;
   late Product product;
 
-  setUp(() {
-    cart = CartProvider();
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    preferences = await SharedPreferences.getInstance();
+    cart = await CartProvider.create(preferences: preferences);
     product = Product(
       id: 1,
       title: 'Test product',
@@ -15,42 +23,79 @@ void main() {
       price: 12.50,
       rating: 4.5,
       stock: 5,
-      thumbnail: '',
-      images: const [],
+      thumbnail: 'https://example.com/product.png',
+      images: const ['https://example.com/product-detail.png'],
     );
   });
 
-  test('adding the same product increases its quantity', () {
-    cart.addToCart(product);
-    cart.addToCart(product);
+  test('saves a product and its serialized data', () async {
+    await cart.addToCart(product);
 
-    expect(cart.items, hasLength(1));
-    expect(cart.items.single.quantity, 2);
-    expect(cart.itemCount, 2);
-    expect(cart.totalPrice, 25.0);
+    final storedJson = preferences.getString(CartProvider.storageKey);
+    expect(storedJson, isNotNull);
+    final storedCart = jsonDecode(storedJson!) as List<dynamic>;
+    expect(storedCart.single['product'], product.toJson());
+    expect(storedCart.single['quantity'], 1);
   });
 
-  test('quantity changes update the item count and total', () {
-    cart.addToCart(product);
-    cart.increaseQuantity(product.id);
+  test('persists quantity increases and decreases', () async {
+    await cart.addToCart(product);
+    await cart.increaseQuantity(product.id);
 
-    expect(cart.itemCount, 2);
-    expect(cart.totalPrice, 25.0);
+    var restoredCart = await CartProvider.create(preferences: preferences);
+    expect(restoredCart.items.single.quantity, 2);
 
-    cart.decreaseQuantity(product.id);
+    await cart.decreaseQuantity(product.id);
+    restoredCart = await CartProvider.create(preferences: preferences);
 
-    expect(cart.items.single.quantity, 1);
-    expect(cart.itemCount, 1);
-    expect(cart.totalPrice, 12.50);
+    expect(restoredCart.items.single.quantity, 1);
+    expect(restoredCart.totalPrice, 12.50);
   });
 
-  test('removing a product clears its quantity and total', () {
-    cart.addToCart(product);
-    cart.increaseQuantity(product.id);
-    cart.removeFromCart(product.id);
+  test('removed products stay removed after restoration', () async {
+    await cart.addToCart(product);
+    await cart.removeFromCart(product.id);
 
-    expect(cart.items, isEmpty);
-    expect(cart.itemCount, 0);
-    expect(cart.totalPrice, 0);
+    final restoredCart = await CartProvider.create(preferences: preferences);
+    expect(restoredCart.items, isEmpty);
+    expect(preferences.getString(CartProvider.storageKey), '[]');
+  });
+
+  test('restores cart data after creating a new provider', () async {
+    await cart.addToCart(product);
+    await cart.addToCart(product);
+
+    final restartedCart = await CartProvider.create(preferences: preferences);
+
+    expect(restartedCart.items, hasLength(1));
+    expect(restartedCart.items.single.product.title, product.title);
+    expect(restartedCart.items.single.quantity, 2);
+    expect(restartedCart.itemCount, 2);
+    expect(restartedCart.totalPrice, 25.0);
+  });
+
+  test('restores an empty cart', () async {
+    await cart.addToCart(product);
+    await cart.removeFromCart(product.id);
+
+    final restartedCart = await CartProvider.create(preferences: preferences);
+
+    expect(restartedCart.items, isEmpty);
+    expect(restartedCart.itemCount, 0);
+    expect(restartedCart.totalPrice, 0);
+  });
+
+  test('invalid stored JSON produces a safe empty cart', () async {
+    SharedPreferences.setMockInitialValues({
+      CartProvider.storageKey: '{invalid json',
+    });
+    preferences = await SharedPreferences.getInstance();
+
+    final restoredCart = await CartProvider.create(preferences: preferences);
+
+    expect(restoredCart.items, isEmpty);
+    expect(restoredCart.itemCount, 0);
+    expect(restoredCart.totalPrice, 0);
+    expect(restoredCart.persistenceError, isNotNull);
   });
 }

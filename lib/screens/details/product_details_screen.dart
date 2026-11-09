@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../data/models/product.dart';
 import '../../providers/cart_provider.dart';
+import '../cart/cart_screen.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
   const ProductDetailsScreen({super.key, required this.product});
@@ -178,17 +179,32 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
         child: SizedBox(
           height: 54,
           child: FilledButton.icon(
-            onPressed: () {
-              context.read<CartProvider>().addToCart(product);
-              ScaffoldMessenger.of(context)
+            onPressed: () async {
+              await context.read<CartProvider>().addToCart(product);
+              if (!context.mounted) return;
+
+              final messenger = ScaffoldMessenger.of(context);
+              messenger
                 ..hideCurrentSnackBar()
                 ..showSnackBar(
                   SnackBar(
-                    content: Text(
-                      'Product added to cart successfully! ${product.title}',
+                    content: _CartAddedNotification(
+                      productTitle: product.title,
+                      onViewCart: () {
+                        messenger.hideCurrentSnackBar();
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const CartScreen(),
+                          ),
+                        );
+                      },
                     ),
+                    backgroundColor: const Color(0xFF173D32),
                     behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 3),
+                    elevation: 0,
+                    padding: EdgeInsets.zero,
+                    margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    duration: const Duration(seconds: 4),
                   ),
                 );
             },
@@ -196,6 +212,97 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
             label: const Text('Add to Cart'),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CartAddedNotification extends StatelessWidget {
+  const _CartAddedNotification({
+    required this.productTitle,
+    required this.onViewCart,
+  });
+
+  final String productTitle;
+  final VoidCallback onViewCart;
+
+  @override
+  Widget build(BuildContext context) {
+    const lightGreen = Color(0xFFC9F2D3);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF173D32),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: const BoxDecoration(
+              color: lightGreen,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.check, color: Color(0xFF173D32), size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Added to Cart!',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Product added successfully',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: lightGreen, fontSize: 12),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  productTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onViewCart,
+            style: TextButton.styleFrom(
+              foregroundColor: lightGreen,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.shopping_bag_outlined, size: 18),
+                SizedBox(height: 2),
+                Text(
+                  'VIEW CART',
+                  maxLines: 1,
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

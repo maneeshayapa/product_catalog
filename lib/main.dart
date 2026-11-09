@@ -7,7 +7,10 @@ import 'providers/cart_provider.dart';
 import 'providers/product_provider.dart';
 import 'screens/home/home_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final cartProvider = await CartProvider.create();
+
   runApp(
     MultiProvider(
       providers: [
@@ -16,7 +19,7 @@ void main() {
             repository: ProductRepository(productService: ProductService()),
           ),
         ),
-        ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider.value(value: cartProvider),
       ],
       child: const MyApp(),
     ),
