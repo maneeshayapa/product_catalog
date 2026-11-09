@@ -7,11 +7,14 @@ import 'package:product_catalog/providers/cart_provider.dart';
 import 'package:product_catalog/providers/product_provider.dart';
 import 'package:product_catalog/screens/home/home_screen.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('opens product details and confirms Add to Cart', (
     WidgetTester tester,
   ) async {
+    SharedPreferences.setMockInitialValues({});
+
     final product = Product(
       id: 1,
       title: 'A useful product',
@@ -22,7 +25,7 @@ void main() {
       thumbnail: '',
       images: const [],
     );
-    final cartProvider = CartProvider();
+    final cartProvider = await CartProvider.create();
 
     await tester.pumpWidget(
       MultiProvider(
@@ -48,11 +51,18 @@ void main() {
 
     await tester.tap(find.text('Add to Cart'));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
-    expect(
-      find.text('Product added to cart successfully! A useful product'),
-      findsOneWidget,
-    );
+    expect(find.text('Added to Cart!'), findsOneWidget);
+    expect(find.text('Product added successfully'), findsOneWidget);
+    expect(find.text('A useful product'), findsNWidgets(2));
+    expect(find.text('VIEW CART'), findsOneWidget);
+    expect(cartProvider.itemCount, 1);
+
+    await tester.tap(find.text('VIEW CART'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Shopping Cart'), findsOneWidget);
     expect(cartProvider.itemCount, 1);
   });
 }
