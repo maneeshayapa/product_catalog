@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/product.dart';
+import '../../data/models/product_review.dart';
 import '../../providers/cart_provider.dart';
+import '../../providers/product_provider.dart';
 import '../cart/cart_screen.dart';
 
 class ProductDetailsScreen extends StatefulWidget {
@@ -17,6 +19,9 @@ class ProductDetailsScreen extends StatefulWidget {
 class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
   late final List<String> _galleryImages;
   late String _selectedImage;
+  List<Product> _relatedProducts = [];
+  bool _isLoadingRelated = true;
+  String? _relatedProductsError;
 
   @override
   void initState() {
@@ -26,6 +31,41 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       ...widget.product.images,
     }.where((image) => image.trim().isNotEmpty).toList();
     _selectedImage = _galleryImages.isEmpty ? '' : _galleryImages.first;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadRelatedProducts();
+    });
+  }
+
+  Future<void> _loadRelatedProducts() async {
+    final category = widget.product.category?.trim();
+    if (category == null || category.isEmpty) {
+      if (mounted) setState(() => _isLoadingRelated = false);
+      return;
+    }
+
+    setState(() {
+      _isLoadingRelated = true;
+      _relatedProductsError = null;
+    });
+    try {
+      final products = await context
+          .read<ProductProvider>()
+          .fetchRelatedProducts(
+            category: category,
+            excludeProductId: widget.product.id,
+          );
+      if (!mounted) return;
+      setState(() {
+        _relatedProducts = products;
+        _isLoadingRelated = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _relatedProductsError = 'Could not load related products.';
+        _isLoadingRelated = false;
+      });
+    }
   }
 
   @override
@@ -120,6 +160,28 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           ?.copyWith(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 12),
+                    if (product.brand != null || product.category != null)
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (product.brand != null &&
+                              product.brand!.trim().isNotEmpty)
+                            _InfoChip(
+                              icon: Icons.storefront_outlined,
+                              iconColor: colors.primary,
+                              label: product.brand!,
+                            ),
+                          if (product.category != null &&
+                              product.category!.trim().isNotEmpty)
+                            _InfoChip(
+                              icon: Icons.category_outlined,
+                              iconColor: colors.primary,
+                              label: product.category!,
+                            ),
+                        ],
+                      ),
+                    const SizedBox(height: 12),
                     Wrap(
                       spacing: 10,
                       runSpacing: 10,
@@ -128,7 +190,8 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         _InfoChip(
                           icon: Icons.star_rounded,
                           iconColor: colors.tertiary,
-                          label: '${product.rating.toStringAsFixed(1)} rating',
+                          label:
+                              '${product.rating.toStringAsFixed(1)} · ${product.reviews.length} reviews',
                         ),
                         _InfoChip(
                           icon: product.stock > 0
@@ -137,20 +200,49 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                           iconColor: product.stock > 0
                               ? colors.primary
                               : colors.error,
-                          label: product.stock > 0
-                              ? '${product.stock} in stock'
-                              : 'Out of stock',
+                          label: [
+                            if (product.availabilityStatus != null &&
+                                product.availabilityStatus!.trim().isNotEmpty)
+                              product.availabilityStatus!,
+                            '${product.stock} in stock',
+                          ].join(' · '),
                         ),
                       ],
                     ),
                     const SizedBox(height: 20),
-                    Text(
-                      '\$${product.price.toStringAsFixed(2)}',
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(
-                            color: colors.primary,
-                            fontWeight: FontWeight.w800,
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          '\$${product.price.toStringAsFixed(2)}',
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(
+                                color: colors.primary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                        if (product.discountPercentage != null &&
+                            product.discountPercentage! > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colors.errorContainer,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              '${product.discountPercentage!.toStringAsFixed(0)}% OFF',
+                              style: TextStyle(
+                                color: colors.onErrorContainer,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
+                      ],
                     ),
                     const SizedBox(height: 20),
                     Text(
@@ -166,6 +258,21 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                         color: Colors.black54,
                         height: 1.5,
                       ),
+                    ),
+                    const SizedBox(height: 20),
+                    _ProductInformation(
+                      warranty: product.warrantyInformation,
+                      shipping: product.shippingInformation,
+                      returns: product.returnPolicy,
+                    ),
+                    const SizedBox(height: 28),
+                    _CustomerReviews(product: product),
+                    const SizedBox(height: 28),
+                    _RelatedProductsSection(
+                      products: _relatedProducts,
+                      isLoading: _isLoadingRelated,
+                      errorMessage: _relatedProductsError,
+                      onRetry: _loadRelatedProducts,
                     ),
                   ],
                 ),
@@ -359,6 +466,361 @@ class _InfoChip extends StatelessWidget {
           Icon(icon, size: 18, color: iconColor),
           const SizedBox(width: 6),
           Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductInformation extends StatelessWidget {
+  const _ProductInformation({
+    required this.warranty,
+    required this.shipping,
+    required this.returns,
+  });
+
+  final String? warranty;
+  final String? shipping;
+  final String? returns;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = [
+      if (_hasText(warranty))
+        (Icons.verified_user_outlined, 'Warranty', warranty!),
+      if (_hasText(shipping))
+        (Icons.local_shipping_outlined, 'Shipping', shipping!),
+      if (_hasText(returns))
+        (Icons.assignment_return_outlined, 'Returns', returns!),
+    ];
+    if (entries.isEmpty) return const SizedBox.shrink();
+
+    return Card(
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            for (var index = 0; index < entries.length; index++) ...[
+              if (index > 0) const Divider(height: 20),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    entries[index].$1,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          entries[index].$2,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          entries[index].$3,
+                          style: const TextStyle(color: Colors.black54),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool _hasText(String? value) => value != null && value.trim().isNotEmpty;
+}
+
+class _CustomerReviews extends StatelessWidget {
+  const _CustomerReviews({required this.product});
+
+  final Product product;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Customer Reviews',
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Icon(Icons.star_rounded, color: colors.tertiary, size: 25),
+            const SizedBox(width: 5),
+            Text(
+              product.rating.toStringAsFixed(1),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Average rating · ${product.reviews.length} reviews',
+              style: const TextStyle(color: Colors.black54),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (product.reviews.isEmpty)
+          const _SectionMessage(message: 'No customer reviews yet.')
+        else
+          ...product.reviews.map((review) => _ReviewCard(review: review)),
+      ],
+    );
+  }
+}
+
+class _ReviewCard extends StatelessWidget {
+  const _ReviewCard({required this.review});
+
+  final ProductReview review;
+
+  @override
+  Widget build(BuildContext context) {
+    final reviewer = review.reviewerName.trim().isEmpty
+        ? 'Customer'
+        : review.reviewerName;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    reviewer,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                Text(
+                  review.date == null
+                      ? 'Date unavailable'
+                      : _formatReviewDate(review.date!),
+                  style: const TextStyle(color: Colors.black54, fontSize: 12),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: List.generate(
+                5,
+                (index) => Icon(
+                  index < review.rating
+                      ? Icons.star_rounded
+                      : Icons.star_border,
+                  size: 17,
+                  color: Theme.of(context).colorScheme.tertiary,
+                ),
+              ),
+            ),
+            if (review.comment.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                review.comment,
+                style: const TextStyle(color: Colors.black87, height: 1.4),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _formatReviewDate(DateTime date) {
+  final localDate = date.toLocal();
+  final month = localDate.month.toString().padLeft(2, '0');
+  final day = localDate.day.toString().padLeft(2, '0');
+  return '$month/$day/${localDate.year}';
+}
+
+class _RelatedProductsSection extends StatelessWidget {
+  const _RelatedProductsSection({
+    required this.products,
+    required this.isLoading,
+    required this.errorMessage,
+    required this.onRetry,
+  });
+
+  final List<Product> products;
+  final bool isLoading;
+  final String? errorMessage;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'You May Also Like',
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 12),
+        if (isLoading)
+          const SizedBox(
+            height: 190,
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (errorMessage != null)
+          _SectionMessage(message: errorMessage!, onRetry: onRetry)
+        else if (products.isEmpty)
+          const _SectionMessage(message: 'No related products found.')
+        else
+          SizedBox(
+            height: 210,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: products.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 12),
+              itemBuilder: (context, index) {
+                final product = products[index];
+                return _RelatedProductCard(
+                  product: product,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ProductDetailsScreen(product: product),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _RelatedProductCard extends StatelessWidget {
+  const _RelatedProductCard({required this.product, required this.onTap});
+
+  final Product product;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      width: 156,
+      child: Card(
+        margin: EdgeInsets.zero,
+        color: Colors.white,
+        clipBehavior: Clip.antiAlias,
+        elevation: 1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: InkWell(
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  color: const Color(0xFFF1F3F5),
+                  padding: const EdgeInsets.all(8),
+                  child: _ProductImage(
+                    imageUrl: product.thumbnail,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '\$${product.price.toStringAsFixed(2)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: colors.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.star_rounded,
+                          size: 16,
+                          color: colors.tertiary,
+                        ),
+                        Text(product.rating.toStringAsFixed(1)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionMessage extends StatelessWidget {
+  const _SectionMessage({required this.message, this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(message, style: const TextStyle(color: Colors.black54)),
+          ),
+          if (onRetry != null)
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
         ],
       ),
     );
