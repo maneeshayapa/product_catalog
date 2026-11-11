@@ -24,4 +24,8 @@ class ProductRepository {
   }) {
     return productService.fetchProductsByCategory(category, limit: limit);
   }
+
+  Future<List<String>> getCategories() {
+    return productService.fetchCategories();
+  }
 }

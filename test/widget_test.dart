@@ -140,4 +140,7 @@ class _FakeProductRepository extends ProductRepository {
   }) async {
     return relatedProducts;
   }
+
+  @override
+  Future<List<String>> getCategories() async => ['test-category'];
 }

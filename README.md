@@ -18,6 +18,8 @@ and keep a locally persisted shopping cart.
 - Product grid with product images, titles, prices, and average ratings.
 - Paginated product loading as you scroll.
 - Product search with a 500 ms debounce.
+- Product category filtering, including an All categories option.
+- Local sorting by default order, price, rating, or product name.
 - Product details with an image gallery, description, brand, category, stock,
   warranty, shipping, and return information when available.
 - Customer reviews and related products from the product category.
@@ -64,6 +66,7 @@ lib/
 test/
 ├── cart_provider_test.dart
 ├── product_model_test.dart
+├── product_provider_test.dart
 └── widget_test.dart
 ```
 
@@ -81,6 +84,7 @@ at `https://dummyjson.com`.
 | --- | --- |
 | List products | `GET /products?limit={limit}&skip={skip}` |
 | Search products | `GET /products/search?q={query}&limit={limit}&skip={skip}` |
+| List product categories | `GET /products/category-list` |
 | Load related products by category | `GET /products/category/{category}?limit={limit}` (the app requests 12) |
 
 Product details, including reviews, are displayed from the product data already
@@ -121,28 +125,35 @@ Run the test suite from the project root:
 flutter test
 ```
 
-The existing three test files contain nine test cases:
+The four test files contain fifteen test cases:
 
 - `test/product_model_test.dart` checks parsing, serialization, reviews, and
   optional product fields.
 - `test/cart_provider_test.dart` checks cart serialization, quantity changes,
   removal, restoration, totals, and invalid saved JSON.
+- `test/product_provider_test.dart` checks category selection, returning to All,
+  all four non-default sorting modes, and search/category pagination behavior.
 - `test/widget_test.dart` exercises product details, reviews, related products,
   adding a product to the cart, and opening the cart with a fake repository.
 
 The tests cover model parsing/serialization, cart persistence and state
-operations, and a widget flow through details, related products, add-to-cart,
-and cart navigation. They are unit and widget tests; there is no live API
-integration test or manual device/UI test in the current test suite.
+operations, product category/sort state, search and pagination interaction, and
+a widget flow through details, related products, add-to-cart, and cart
+navigation. They are unit and widget tests; there is no live API integration
+test or manual device/UI test in the current test suite.
 
 ## State management
 
 The app uses Provider to make `ProductProvider` and `CartProvider` available
 above the widget tree. `ProductProvider` manages the loaded products, search
-query, pagination offsets, loading flags, and request errors; screens listen to
-it and rebuild when it notifies listeners. `CartProvider` manages cart items,
-quantities, the item count, total price, and persistence operations. This keeps
-screen widgets focused on presenting state and forwarding user actions.
+query, category selection, sort option, pagination offsets, loading flags, and
+request errors; screens listen to it and rebuild when it notifies listeners.
+Category choices are fetched through `ProductService` and `ProductRepository`.
+Category filtering works on fetched search results, while sorting is local and
+is reapplied whenever another page is loaded. `CartProvider` manages cart
+items, quantities, the item count, total price, and persistence operations.
+This keeps screen widgets focused on presenting state and forwarding user
+actions.
 
 ## Cart persistence
 
@@ -161,13 +172,12 @@ stored locally on the device; it is not synchronized to a server.
 - The cart has no checkout, payment, or order-submission flow.
 - Product quantities can be increased without enforcing the product's stock
   value.
-- Product browsing currently provides listing, search, pagination, and related
-  products; there is no separate category-browsing or sorting interface.
+- Sorting applies to products loaded so far; it does not reorder the complete
+  server-side catalog before every page is fetched.
 
 ## Possible future improvements
 
 - Add checkout and order management if a backend is introduced.
-- Add catalog filtering and sorting.
 - Add tests for product-service request behavior and pagination/search states.
 - Surface cart persistence errors directly in the cart UI.
 
