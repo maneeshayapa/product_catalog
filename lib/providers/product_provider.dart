@@ -30,6 +30,17 @@ class ProductProvider extends ChangeNotifier {
   String? _currentSearch;
   int _requestId = 0;
 
+  Future<List<Product>> fetchRelatedProducts({
+    required String category,
+    required int excludeProductId,
+  }) async {
+    final products = await repository.getProductsByCategory(
+      category,
+      limit: 12,
+    );
+    return products.where((product) => product.id != excludeProductId).toList();
+  }
+
   Future<void> fetchProducts({String? search}) async {
     final requestId = ++_requestId;
     _isLoading = true;
