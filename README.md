@@ -117,6 +117,20 @@ flutter run
 To select a specific device, use `flutter run -d <device-id>` with an ID shown
 by `flutter devices`.
 
+## Build the Android debug APK
+
+Create a debug APK from the project root:
+
+```bash
+flutter build apk --debug
+```
+
+The APK is written to
+`build/app/outputs/flutter-apk/app-debug.apk`. The `build/` directory is
+gitignored, so attach the APK separately (for example, as a GitHub release
+asset or a shared download) when submitting; do not commit generated build
+files.
+
 ## Tests and coverage
 
 Run the test suite from the project root:
@@ -170,8 +184,8 @@ stored locally on the device; it is not synchronized to a server.
 - The cart is local to the current app installation and is not synced between
   devices or accounts.
 - The cart has no checkout, payment, or order-submission flow.
-- Product quantities can be increased without enforcing the product's stock
-  value.
+- Cart quantities are limited to the stock value returned by the API, but stock
+  is not revalidated with the server and may become outdated.
 - Sorting applies to products loaded so far; it does not reorder the complete
   server-side catalog before every page is fetched.
 
