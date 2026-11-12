@@ -36,7 +36,27 @@ class CartScreen extends StatelessWidget {
               return _CartItemCard(
                 product: item.product,
                 quantity: item.quantity,
-                onIncrease: () => cart.increaseQuantity(item.product.id),
+                onIncrease: () async {
+                  final result = await cart.increaseQuantity(item.product.id);
+                  if (!context.mounted ||
+                      result == CartOperationResult.success) {
+                    return;
+                  }
+                  final message = switch (result) {
+                    CartOperationResult.outOfStock =>
+                      'This product is out of stock.',
+                    CartOperationResult.stockLimitReached =>
+                      'You have reached the available stock limit.',
+                    CartOperationResult.itemNotFound =>
+                      'This product is no longer in your cart.',
+                    CartOperationResult.unchanged =>
+                      'The cart quantity was not changed.',
+                    CartOperationResult.success => '',
+                  };
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(message)));
+                },
                 onDecrease: () => cart.decreaseQuantity(item.product.id),
                 onRemove: () => cart.removeFromCart(item.product.id),
               );
@@ -156,6 +176,11 @@ class _CartItemCard extends StatelessWidget {
                     '\$${product.price.toStringAsFixed(2)} each',
                     style: TextStyle(color: colors.primary),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'In cart: $quantity / ${product.stock} available',
+                    style: const TextStyle(color: Colors.black54, fontSize: 12),
+                  ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -174,7 +199,7 @@ class _CartItemCard extends StatelessWidget {
                       _QuantityButton(
                         icon: Icons.add,
                         tooltip: 'Increase quantity',
-                        onPressed: onIncrease,
+                        onPressed: quantity < product.stock ? onIncrease : null,
                       ),
                       const Spacer(),
                       IconButton(

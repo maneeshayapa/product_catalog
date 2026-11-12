@@ -4,15 +4,11 @@ import '../data/models/product.dart';
 import '../data/repositories/product_repository.dart';
 
 enum ProductSortOption {
-  defaultOrder('Default'),
-  priceLowToHigh('Price: Low to High'),
-  priceHighToLow('Price: High to Low'),
-  ratingHighestFirst('Rating: Highest First'),
-  nameAToZ('Name: A–Z');
-
-  const ProductSortOption(this.label);
-
-  final String label;
+  defaultOrder,
+  priceLowToHigh,
+  priceHighToLow,
+  ratingHighestFirst,
+  nameAToZ,
 }
 
 class ProductProvider extends ChangeNotifier {
@@ -21,6 +17,47 @@ class ProductProvider extends ChangeNotifier {
   ProductProvider({required this.repository});
 
   List<Product> _products = [];
+
+  List<Product> get products {
+    final visibleProducts = _products
+        .where(
+          (product) =>
+              _selectedCategory == 'All' ||
+              product.category == _selectedCategory,
+        )
+        .toList();
+
+    switch (_sortOption) {
+      case ProductSortOption.defaultOrder:
+        break;
+      case ProductSortOption.priceLowToHigh:
+        visibleProducts.sort((a, b) => a.price.compareTo(b.price));
+      case ProductSortOption.priceHighToLow:
+        visibleProducts.sort((a, b) => b.price.compareTo(a.price));
+      case ProductSortOption.ratingHighestFirst:
+        visibleProducts.sort((a, b) => b.rating.compareTo(a.rating));
+      case ProductSortOption.nameAToZ:
+        visibleProducts.sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        );
+    }
+    return visibleProducts;
+  }
+
+  List<String> _categories = [];
+  List<String> get categories => _categories;
+
+  bool _isLoadingCategories = false;
+  bool get isLoadingCategories => _isLoadingCategories;
+
+  String? _categoryErrorMessage;
+  String? get categoryErrorMessage => _categoryErrorMessage;
+
+  String _selectedCategory = 'All';
+  String get selectedCategory => _selectedCategory;
+
+  ProductSortOption _sortOption = ProductSortOption.defaultOrder;
+  ProductSortOption get sortOption => _sortOption;
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -38,61 +75,32 @@ class ProductProvider extends ChangeNotifier {
   bool get hasMore => _hasMore;
 
   String? _currentSearch;
-  String? _selectedCategory;
-  ProductSortOption _sortOption = ProductSortOption.defaultOrder;
   int _requestId = 0;
+  bool _categoriesRequested = false;
 
-  List<String> _categories = [];
-  List<String> get categories => _categories;
-
-  bool _isLoadingCategories = false;
-  bool get isLoadingCategories => _isLoadingCategories;
-
-  String? _categoriesErrorMessage;
-  String? get categoriesErrorMessage => _categoriesErrorMessage;
-
-  String? get selectedCategory => _selectedCategory;
-
-  ProductSortOption get sortOption => _sortOption;
-
-  List<Product> get products {
-    final sortedProducts = List<Product>.of(_products);
-    switch (_sortOption) {
-      case ProductSortOption.defaultOrder:
-        break;
-      case ProductSortOption.priceLowToHigh:
-        sortedProducts.sort((a, b) => a.price.compareTo(b.price));
-      case ProductSortOption.priceHighToLow:
-        sortedProducts.sort((a, b) => b.price.compareTo(a.price));
-      case ProductSortOption.ratingHighestFirst:
-        sortedProducts.sort((a, b) => b.rating.compareTo(a.rating));
-      case ProductSortOption.nameAToZ:
-        sortedProducts.sort(
-          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
-        );
-    }
-    return sortedProducts;
-  }
-
-  Future<void> loadCategories() async {
+  Future<void> fetchCategories() async {
+    if (_categoriesRequested || _isLoadingCategories) return;
+    _categoriesRequested = true;
     _isLoadingCategories = true;
-    _categoriesErrorMessage = null;
+    _categoryErrorMessage = null;
     notifyListeners();
 
     try {
       _categories = await repository.getCategories();
-    } catch (error) {
-      _categoriesErrorMessage = error.toString();
+    } catch (e) {
+      _categoryErrorMessage = e.toString();
+      _categoriesRequested = false;
     } finally {
       _isLoadingCategories = false;
       notifyListeners();
     }
   }
 
-  Future<void> selectCategory(String? category) async {
+  void selectCategory(String category) {
+    if (category != 'All' && !_categories.contains(category)) return;
     if (_selectedCategory == category) return;
     _selectedCategory = category;
-    await fetchProducts(search: _currentSearch);
+    notifyListeners();
   }
 
   void setSortOption(ProductSortOption option) {
@@ -126,15 +134,16 @@ class ProductProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      while (_products.length < _limit && _hasMore) {
-        final result = await repository.getProducts(
-          limit: _limit,
-          skip: _skip,
-          search: _currentSearch,
-        );
-        if (requestId != _requestId) return;
-        _appendMatchingProducts(result);
-      }
+      final result = await repository.getProducts(
+        limit: _limit,
+        skip: _skip,
+        search: _currentSearch,
+      );
+
+      if (requestId != _requestId) return;
+      _products = result;
+      _skip = result.length;
+      _hasMore = result.length == _limit;
     } catch (e) {
       if (requestId == _requestId) {
         _errorMessage = e.toString();
@@ -156,16 +165,16 @@ class ProductProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final targetCount = _products.length + _limit;
-      while (_products.length < targetCount && _hasMore) {
-        final result = await repository.getProducts(
-          limit: _limit,
-          skip: _skip,
-          search: _currentSearch,
-        );
-        if (requestId != _requestId) return;
-        _appendMatchingProducts(result);
-      }
+      final result = await repository.getProducts(
+        limit: _limit,
+        skip: _skip,
+        search: _currentSearch,
+      );
+
+      if (requestId != _requestId) return;
+      _products.addAll(result);
+      _skip += result.length;
+      _hasMore = result.length == _limit;
     } catch (e) {
       if (requestId == _requestId) {
         _errorMessage = e.toString();
@@ -176,16 +185,5 @@ class ProductProvider extends ChangeNotifier {
         notifyListeners();
       }
     }
-  }
-
-  void _appendMatchingProducts(List<Product> products) {
-    _skip += products.length;
-    _hasMore = products.length == _limit;
-    _products.addAll(
-      products.where(
-        (product) =>
-            _selectedCategory == null || product.category == _selectedCategory,
-      ),
-    );
   }
 }

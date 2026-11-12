@@ -5,8 +5,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/models/product.dart';
 
+enum CartOperationResult {
+  success,
+  outOfStock,
+  stockLimitReached,
+  itemNotFound,
+  unchanged,
+}
+
 class CartItem {
-  CartItem({required this.product, required this.quantity});
+  CartItem({required this.product, required this.quantity}) {
+    if (product.stock < 1 || quantity < 1 || quantity > product.stock) {
+      throw ArgumentError('Cart quantity must be within available stock.');
+    }
+  }
 
   final Product product;
   final int quantity;
@@ -58,19 +70,28 @@ class CartProvider extends ChangeNotifier {
   double get totalPrice =>
       _items.values.fold(0, (total, item) => total + item.totalPrice);
 
-  Future<void> addToCart(Product product) async {
+  Future<CartOperationResult> addToCart(Product product) async {
+    if (product.stock <= 0) return CartOperationResult.outOfStock;
+
     final existingItem = _items[product.id];
-    _items[product.id] = CartItem(
-      product: product,
-      quantity: (existingItem?.quantity ?? 0) + 1,
-    );
+    final nextQuantity = (existingItem?.quantity ?? 0) + 1;
+    if (nextQuantity > product.stock) {
+      return CartOperationResult.stockLimitReached;
+    }
+
+    _items[product.id] = CartItem(product: product, quantity: nextQuantity);
     notifyListeners();
     await _saveCart();
+    return CartOperationResult.success;
   }
 
-  Future<void> increaseQuantity(int productId) async {
+  Future<CartOperationResult> increaseQuantity(int productId) async {
     final item = _items[productId];
-    if (item == null) return;
+    if (item == null) return CartOperationResult.itemNotFound;
+    if (item.product.stock <= 0) return CartOperationResult.outOfStock;
+    if (item.quantity >= item.product.stock) {
+      return CartOperationResult.stockLimitReached;
+    }
 
     _items[productId] = CartItem(
       product: item.product,
@@ -78,11 +99,13 @@ class CartProvider extends ChangeNotifier {
     );
     notifyListeners();
     await _saveCart();
+    return CartOperationResult.success;
   }
 
-  Future<void> decreaseQuantity(int productId) async {
+  Future<CartOperationResult> decreaseQuantity(int productId) async {
     final item = _items[productId];
-    if (item == null || item.quantity <= 1) return;
+    if (item == null) return CartOperationResult.itemNotFound;
+    if (item.quantity <= 1) return CartOperationResult.unchanged;
 
     _items[productId] = CartItem(
       product: item.product,
@@ -90,6 +113,7 @@ class CartProvider extends ChangeNotifier {
     );
     notifyListeners();
     await _saveCart();
+    return CartOperationResult.success;
   }
 
   Future<void> removeFromCart(int productId) async {
@@ -110,14 +134,38 @@ class CartProvider extends ChangeNotifier {
       }
 
       final restoredItems = <int, CartItem>{};
+      var cartWasRepaired = false;
       for (final entry in decoded) {
         if (entry is! Map) {
           throw const FormatException('Saved cart item must be an object.');
         }
-        final item = CartItem.fromJson(Map<String, dynamic>.from(entry));
-        restoredItems[item.product.id] = item;
+
+        final itemJson = Map<String, dynamic>.from(entry);
+        final rawQuantity = itemJson['quantity'];
+        if (rawQuantity is! int || rawQuantity < 1) {
+          cartWasRepaired = true;
+          continue;
+        }
+        final rawProduct = itemJson['product'];
+        if (rawProduct is! Map) {
+          throw const FormatException('Cart item product must be an object.');
+        }
+        final product = Product.fromJson(Map<String, dynamic>.from(rawProduct));
+        if (product.stock <= 0) {
+          cartWasRepaired = true;
+          continue;
+        }
+        final quantity = rawQuantity > product.stock
+            ? product.stock
+            : rawQuantity;
+        if (quantity != rawQuantity) cartWasRepaired = true;
+        restoredItems[product.id] = CartItem(
+          product: product,
+          quantity: quantity,
+        );
       }
       _items.addAll(restoredItems);
+      if (cartWasRepaired) await _saveCart();
     } catch (error) {
       _items.clear();
       _persistenceError = 'Unable to restore saved cart: $error';

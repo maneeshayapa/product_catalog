@@ -24,17 +24,17 @@ void main() {
   test(
     'selecting a category filters products and All restores every result',
     () async {
-      await provider.loadCategories();
+      await provider.fetchCategories();
       await provider.fetchProducts();
 
       expect(provider.categories, ['beauty', 'tools']);
 
-      await provider.selectCategory('beauty');
+      provider.selectCategory('beauty');
       expect(provider.selectedCategory, 'beauty');
       expect(provider.products.map((product) => product.id), [1, 3]);
 
-      await provider.selectCategory(null);
-      expect(provider.selectedCategory, isNull);
+      provider.selectCategory('All');
+      expect(provider.selectedCategory, 'All');
       expect(provider.products, hasLength(4));
     },
   );
@@ -96,11 +96,14 @@ void main() {
       );
       provider = ProductProvider(repository: repository);
 
+      await provider.fetchCategories();
       await provider.fetchProducts(search: 'needle');
-      await provider.selectCategory('beauty');
+      final requestCount = repository.requests.length;
+      provider.selectCategory('beauty');
       provider.setSortOption(ProductSortOption.priceHighToLow);
 
-      expect(provider.products, hasLength(10));
+      expect(provider.products, hasLength(5));
+      expect(repository.requests, hasLength(requestCount));
       expect(
         provider.products.every(
           (product) =>
@@ -109,6 +112,11 @@ void main() {
         ),
         isTrue,
       );
+
+      await provider.loadMore();
+
+      expect(provider.products, hasLength(10));
+      expect(provider.hasMore, isTrue);
 
       await provider.loadMore();
 
