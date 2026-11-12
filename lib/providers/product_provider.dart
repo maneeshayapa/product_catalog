@@ -3,6 +3,14 @@ import 'package:flutter/material.dart';
 import '../data/models/product.dart';
 import '../data/repositories/product_repository.dart';
 
+enum ProductSortOption {
+  defaultOrder,
+  priceLowToHigh,
+  priceHighToLow,
+  ratingHighestFirst,
+  nameAToZ,
+}
+
 class ProductProvider extends ChangeNotifier {
   final ProductRepository repository;
 
@@ -10,7 +18,46 @@ class ProductProvider extends ChangeNotifier {
 
   List<Product> _products = [];
 
-  List<Product> get products => _products;
+  List<Product> get products {
+    final visibleProducts = _products
+        .where(
+          (product) =>
+              _selectedCategory == 'All' ||
+              product.category == _selectedCategory,
+        )
+        .toList();
+
+    switch (_sortOption) {
+      case ProductSortOption.defaultOrder:
+        break;
+      case ProductSortOption.priceLowToHigh:
+        visibleProducts.sort((a, b) => a.price.compareTo(b.price));
+      case ProductSortOption.priceHighToLow:
+        visibleProducts.sort((a, b) => b.price.compareTo(a.price));
+      case ProductSortOption.ratingHighestFirst:
+        visibleProducts.sort((a, b) => b.rating.compareTo(a.rating));
+      case ProductSortOption.nameAToZ:
+        visibleProducts.sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        );
+    }
+    return visibleProducts;
+  }
+
+  List<String> _categories = [];
+  List<String> get categories => _categories;
+
+  bool _isLoadingCategories = false;
+  bool get isLoadingCategories => _isLoadingCategories;
+
+  String? _categoryErrorMessage;
+  String? get categoryErrorMessage => _categoryErrorMessage;
+
+  String _selectedCategory = 'All';
+  String get selectedCategory => _selectedCategory;
+
+  ProductSortOption _sortOption = ProductSortOption.defaultOrder;
+  ProductSortOption get sortOption => _sortOption;
 
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -29,6 +76,38 @@ class ProductProvider extends ChangeNotifier {
 
   String? _currentSearch;
   int _requestId = 0;
+  bool _categoriesRequested = false;
+
+  Future<void> fetchCategories() async {
+    if (_categoriesRequested || _isLoadingCategories) return;
+    _categoriesRequested = true;
+    _isLoadingCategories = true;
+    _categoryErrorMessage = null;
+    notifyListeners();
+
+    try {
+      _categories = await repository.getCategories();
+    } catch (e) {
+      _categoryErrorMessage = e.toString();
+      _categoriesRequested = false;
+    } finally {
+      _isLoadingCategories = false;
+      notifyListeners();
+    }
+  }
+
+  void selectCategory(String category) {
+    if (category != 'All' && !_categories.contains(category)) return;
+    if (_selectedCategory == category) return;
+    _selectedCategory = category;
+    notifyListeners();
+  }
+
+  void setSortOption(ProductSortOption option) {
+    if (_sortOption == option) return;
+    _sortOption = option;
+    notifyListeners();
+  }
 
   Future<List<Product>> fetchRelatedProducts({
     required String category,
