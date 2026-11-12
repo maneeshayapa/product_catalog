@@ -68,7 +68,7 @@ class ProductService {
         throw Exception(
           'Failed to load product categories: ${response.statusCode}',
         );
-      }
+       }
 
       final decoded = jsonDecode(response.body);
       if (decoded is! List || decoded.any((category) => category is! String)) {

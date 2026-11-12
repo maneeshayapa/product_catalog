@@ -139,7 +139,7 @@ Run the test suite from the project root:
 flutter test
 ```
 
-The four test files contain fifteen test cases:
+The four test files contain twenty-one test cases:
 
 - `test/product_model_test.dart` checks parsing, serialization, reviews, and
   optional product fields.
