@@ -27,16 +27,67 @@ class ProductService {
       final response = await http.get(uri).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
-
-        final List productsJson = data['products'];
-
-        return productsJson.map((json) => Product.fromJson(json)).toList();
+        return _decodeProducts(response.body);
       } else {
         throw Exception('Failed to load products: ${response.statusCode}');
       }
     } catch (e) {
       throw Exception('Unable to fetch products: $e');
     }
+  }
+
+  Future<List<Product>> fetchProductsByCategory(
+    String category, {
+    int limit = 10,
+  }) async {
+    try {
+      final uri = Uri.parse(
+        '$baseUrl/products/category/${Uri.encodeComponent(category)}',
+      ).replace(queryParameters: {'limit': limit.toString()});
+
+      final response = await http.get(uri).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        return _decodeProducts(response.body);
+      }
+      throw Exception(
+        'Failed to load related products: ${response.statusCode}',
+      );
+    } catch (e) {
+      throw Exception('Unable to fetch related products: $e');
+    }
+  }
+
+  Future<List<String>> fetchCategories() async {
+    try {
+      final uri = Uri.parse('$baseUrl/products/category-list');
+      final response = await http.get(uri).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Failed to load product categories: ${response.statusCode}',
+        );
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! List) {
+        throw const FormatException('Category response must be a list.');
+      }
+      return decoded.whereType<String>().toList();
+    } catch (e) {
+      throw Exception('Unable to fetch product categories: $e');
+    }
+  }
+
+  List<Product> _decodeProducts(String responseBody) {
+    final Map<String, dynamic> data = jsonDecode(responseBody);
+    final productsJson = data['products'];
+    if (productsJson is! List) {
+      throw const FormatException('Product response must contain a list.');
+    }
+    return productsJson
+        .whereType<Map>()
+        .map((json) => Product.fromJson(Map<String, dynamic>.from(json)))
+        .toList();
   }
 }

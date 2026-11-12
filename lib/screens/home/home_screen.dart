@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../data/models/product.dart';
+import '../../providers/cart_provider.dart';
 import '../../providers/product_provider.dart';
+import '../cart/cart_screen.dart';
 import '../details/product_details_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -25,7 +27,10 @@ class _HomeScreenState extends State<HomeScreen> {
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        context.read<ProductProvider>().fetchProducts();
+        final provider = context.read<ProductProvider>();
+        provider
+          ..loadCategories()
+          ..fetchProducts();
       }
     });
   }
@@ -81,6 +86,24 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
         elevation: 0,
+        actions: [
+          Consumer<CartProvider>(
+            builder: (context, cart, _) => IconButton(
+              tooltip: 'Shopping cart',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const CartScreen()),
+                );
+              },
+              icon: Badge.count(
+                count: cart.itemCount,
+                isLabelVisible: cart.itemCount > 0,
+                child: const Icon(Icons.shopping_cart_outlined),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Column(
         children: [
@@ -115,15 +138,31 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
+          Consumer<ProductProvider>(
+            builder: (context, provider, _) => _CategoryFilter(
+              categories: provider.categories,
+              selectedCategory: provider.selectedCategory,
+              isLoading: provider.isLoadingCategories,
+              errorMessage: provider.categoriesErrorMessage,
+              onSelect: provider.selectCategory,
+              onRetry: provider.loadCategories,
+            ),
+          ),
+          Consumer<ProductProvider>(
+            builder: (context, provider, _) => _SortControl(
+              selectedOption: provider.sortOption,
+              onChanged: provider.setSortOption,
+            ),
+          ),
           Expanded(
             child: Consumer<ProductProvider>(
               builder: (context, provider, _) {
-                if (provider.isLoading && provider.products.isEmpty) {
+                final products = provider.products;
+                if (provider.isLoading && products.isEmpty) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                if (provider.errorMessage != null &&
-                    provider.products.isEmpty) {
+                if (provider.errorMessage != null && products.isEmpty) {
                   return _MessageState(
                     icon: Icons.cloud_off_outlined,
                     message: 'We couldn’t load products. Please try again.',
@@ -132,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 }
 
-                if (provider.products.isEmpty) {
+                if (products.isEmpty) {
                   return const _MessageState(
                     icon: Icons.search_off,
                     message: 'No products found. Try another search.',
@@ -156,9 +195,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         mainAxisSpacing: 12,
                         childAspectRatio: columns == 2 ? 0.68 : 0.78,
                       ),
-                      itemCount: provider.products.length + 1,
+                      itemCount: products.length + 1,
                       itemBuilder: (context, index) {
-                        if (index == provider.products.length) {
+                        if (index == products.length) {
                           if (provider.isLoadingMore) {
                             return const Center(
                               child: CircularProgressIndicator(),
@@ -171,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           }
                           return const SizedBox.shrink();
                         }
-                        final product = provider.products[index];
+                        final product = products[index];
                         return _ProductCard(
                           product: product,
                           onTap: () {
@@ -212,6 +251,149 @@ class _HomeScreenState extends State<HomeScreen> {
             child: const Icon(Icons.keyboard_arrow_up),
           );
         },
+      ),
+    );
+  }
+}
+
+class _CategoryFilter extends StatelessWidget {
+  const _CategoryFilter({
+    required this.categories,
+    required this.selectedCategory,
+    required this.isLoading,
+    required this.errorMessage,
+    required this.onSelect,
+    required this.onRetry,
+  });
+
+  final List<String> categories;
+  final String? selectedCategory;
+  final bool isLoading;
+  final String? errorMessage;
+  final ValueChanged<String?> onSelect;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 48,
+          child: Row(
+            children: [
+              Expanded(
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  children: [
+                    _categoryChip(
+                      label: 'All',
+                      selected: selectedCategory == null,
+                      onSelected: () => onSelect(null),
+                    ),
+                    for (final category in categories)
+                      _categoryChip(
+                        label: _categoryLabel(category),
+                        selected: selectedCategory == category,
+                        onSelected: () => onSelect(category),
+                      ),
+                  ],
+                ),
+              ),
+              if (isLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              else if (errorMessage != null)
+                IconButton(
+                  onPressed: onRetry,
+                  tooltip: 'Retry loading categories',
+                  icon: const Icon(Icons.refresh),
+                ),
+            ],
+          ),
+        ),
+        if (errorMessage != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+            child: Text(
+              'Categories unavailable. Tap refresh to retry.',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 12,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _categoryChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onSelected,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8, top: 4, bottom: 4),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onSelected(),
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
+
+  String _categoryLabel(String category) {
+    return category
+        .split('-')
+        .map(
+          (word) => word.isEmpty
+              ? word
+              : '${word[0].toUpperCase()}${word.substring(1)}',
+        )
+        .join(' ');
+  }
+}
+
+class _SortControl extends StatelessWidget {
+  const _SortControl({required this.selectedOption, required this.onChanged});
+
+  final ProductSortOption selectedOption;
+  final ValueChanged<ProductSortOption> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          const Text('Sort by'),
+          const SizedBox(width: 8),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<ProductSortOption>(
+              value: selectedOption,
+              onChanged: (option) {
+                if (option != null) onChanged(option);
+              },
+              items: ProductSortOption.values
+                  .map(
+                    (option) => DropdownMenuItem<ProductSortOption>(
+                      value: option,
+                      child: Text(option.label),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ],
       ),
     );
   }

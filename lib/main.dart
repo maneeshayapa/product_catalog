@@ -3,15 +3,24 @@ import 'package:provider/provider.dart';
 
 import 'data/repositories/product_repository.dart';
 import 'data/services/product_service.dart';
+import 'providers/cart_provider.dart';
 import 'providers/product_provider.dart';
 import 'screens/home/home_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final cartProvider = await CartProvider.create();
+
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ProductProvider(
-        repository: ProductRepository(productService: ProductService()),
-      ),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => ProductProvider(
+            repository: ProductRepository(productService: ProductService()),
+          ),
+        ),
+        ChangeNotifierProvider.value(value: cartProvider),
+      ],
       child: const MyApp(),
     ),
   );

@@ -17,4 +17,15 @@ class ProductRepository {
       search: search,
     );
   }
+
+  Future<List<Product>> getProductsByCategory(
+    String category, {
+    int limit = 10,
+  }) {
+    return productService.fetchProductsByCategory(category, limit: limit);
+  }
+
+  Future<List<String>> getCategories() {
+    return productService.fetchCategories();
+  }
 }
