@@ -283,41 +283,79 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
       ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-        child: SizedBox(
-          height: 54,
-          child: FilledButton.icon(
-            onPressed: () async {
-              await context.read<CartProvider>().addToCart(product);
-              if (!context.mounted) return;
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (product.stock <= 0) ...[
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'This product is out of stock and cannot be added.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+            SizedBox(
+              height: 54,
+              child: FilledButton.icon(
+                onPressed: product.stock <= 0
+                    ? null
+                    : () async {
+                        final result = await context
+                            .read<CartProvider>()
+                            .addToCart(product);
+                        if (!context.mounted) return;
 
-              final messenger = ScaffoldMessenger.of(context);
-              messenger
-                ..hideCurrentSnackBar()
-                ..showSnackBar(
-                  SnackBar(
-                    content: _CartAddedNotification(
-                      productTitle: product.title,
-                      onViewCart: () {
-                        messenger.hideCurrentSnackBar();
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const CartScreen(),
-                          ),
-                        );
+                        final messenger = ScaffoldMessenger.of(context);
+                        if (result != CartOperationResult.success) {
+                          final message = switch (result) {
+                            CartOperationResult.outOfStock =>
+                              'This product is out of stock.',
+                            CartOperationResult.stockLimitReached =>
+                              'You have reached the available stock limit.',
+                            CartOperationResult.itemNotFound =>
+                              'This product is no longer in your cart.',
+                            CartOperationResult.unchanged =>
+                              'The cart quantity was not changed.',
+                            CartOperationResult.success => '',
+                          };
+                          messenger
+                            ..hideCurrentSnackBar()
+                            ..showSnackBar(SnackBar(content: Text(message)));
+                          return;
+                        }
+
+                        messenger
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(
+                            SnackBar(
+                              content: _CartAddedNotification(
+                                productTitle: product.title,
+                                onViewCart: () {
+                                  messenger.hideCurrentSnackBar();
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => const CartScreen(),
+                                    ),
+                                  );
+                                },
+                              ),
+                              backgroundColor: const Color(0xFF173D32),
+                              behavior: SnackBarBehavior.floating,
+                              elevation: 0,
+                              padding: EdgeInsets.zero,
+                              margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                              duration: const Duration(seconds: 4),
+                            ),
+                          );
                       },
-                    ),
-                    backgroundColor: const Color(0xFF173D32),
-                    behavior: SnackBarBehavior.floating,
-                    elevation: 0,
-                    padding: EdgeInsets.zero,
-                    margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                    duration: const Duration(seconds: 4),
-                  ),
-                );
-            },
-            icon: const Icon(Icons.shopping_cart_outlined),
-            label: const Text('Add to Cart'),
-          ),
+                icon: const Icon(Icons.shopping_cart_outlined),
+                label: Text(
+                  product.stock <= 0 ? 'Out of Stock' : 'Add to Cart',
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
