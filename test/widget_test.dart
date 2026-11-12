@@ -111,6 +111,74 @@ void main() {
     expect(find.text('Shopping Cart'), findsOneWidget);
     expect(cartProvider.itemCount, 1);
   });
+
+  testWidgets('category and sorting controls filter and order products', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final repository = _CatalogProductRepository([
+      _catalogProduct(
+        id: 1,
+        title: 'Glow serum',
+        price: 10,
+        rating: 4.2,
+        category: 'beauty',
+      ),
+      _catalogProduct(
+        id: 2,
+        title: 'Daily moisturizer',
+        price: 20,
+        rating: 4.8,
+        category: 'beauty',
+      ),
+      _catalogProduct(
+        id: 3,
+        title: 'Compact camera',
+        price: 30,
+        rating: 4.5,
+        category: 'electronics',
+      ),
+    ]);
+    final productProvider = ProductProvider(repository: repository);
+    final cartProvider = await CartProvider.create();
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<ProductProvider>.value(value: productProvider),
+          ChangeNotifierProvider.value(value: cartProvider),
+        ],
+        child: const MaterialApp(home: HomeScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('category-chip-all')), findsOneWidget);
+    expect(find.byKey(const ValueKey('category-chip-beauty')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('category-chip-electronics')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('product-sort-dropdown')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('category-chip-beauty')));
+    await tester.pumpAndSettle();
+    expect(productProvider.products.map((product) => product.id), [1, 2]);
+    expect(repository.productFetchCount, 1);
+
+    await tester.tap(find.byKey(const ValueKey('product-sort-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Price: High to Low').last);
+    await tester.pumpAndSettle();
+    expect(productProvider.products.map((product) => product.id), [2, 1]);
+    expect(repository.productFetchCount, 1);
+
+    await tester.enterText(find.byType(TextField), 'Glow serum');
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+    expect(productProvider.products.map((product) => product.id), [1]);
+    expect(repository.lastSearch, 'Glow serum');
+  });
 }
 
 class _FakeProductRepository extends ProductRepository {
@@ -119,6 +187,12 @@ class _FakeProductRepository extends ProductRepository {
 
   final Product product;
   final List<Product> relatedProducts;
+
+  @override
+  Future<List<String>> getCategories() async {
+    final category = product.category;
+    return category == null ? [] : [category];
+  }
 
   @override
   Future<List<Product>> getProducts({
@@ -140,4 +214,55 @@ class _FakeProductRepository extends ProductRepository {
   }) async {
     return relatedProducts;
   }
+}
+
+class _CatalogProductRepository extends ProductRepository {
+  _CatalogProductRepository(this.catalog)
+    : super(productService: ProductService());
+
+  final List<Product> catalog;
+  int productFetchCount = 0;
+  String? lastSearch;
+
+  @override
+  Future<List<String>> getCategories() async => ['beauty', 'electronics'];
+
+  @override
+  Future<List<Product>> getProducts({
+    int limit = 10,
+    int skip = 0,
+    String? search,
+  }) async {
+    productFetchCount++;
+    lastSearch = search;
+    final matches = search == null
+        ? catalog
+        : catalog
+              .where(
+                (product) =>
+                    product.title.toLowerCase().contains(search.toLowerCase()),
+              )
+              .toList();
+    return matches.skip(skip).take(limit).toList();
+  }
+}
+
+Product _catalogProduct({
+  required int id,
+  required String title,
+  required double price,
+  required double rating,
+  required String category,
+}) {
+  return Product(
+    id: id,
+    title: title,
+    description: '$title description',
+    price: price,
+    rating: rating,
+    stock: 5,
+    thumbnail: '',
+    images: const [],
+    category: category,
+  );
 }

@@ -58,6 +58,30 @@ class ProductService {
     }
   }
 
+  Future<List<String>> fetchCategories() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$baseUrl/products/category-list'))
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Failed to load product categories: ${response.statusCode}',
+        );
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is! List || decoded.any((category) => category is! String)) {
+        throw const FormatException(
+          'Category response must be a list of strings.',
+        );
+      }
+      return decoded.cast<String>();
+    } catch (e) {
+      throw Exception('Unable to fetch product categories: $e');
+    }
+  }
+
   List<Product> _decodeProducts(String responseBody) {
     final Map<String, dynamic> data = jsonDecode(responseBody);
     final productsJson = data['products'];
